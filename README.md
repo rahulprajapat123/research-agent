@@ -52,7 +52,7 @@ All outputs are **cited**, **contextual**, and **actionable**.
 ### Prerequisites
 
 - **Python 3.10+**
-- **Supabase account** (Postgres with pgvector)
+- **Azure Database** (PostgreSQL, SQL Database, or Cosmos DB)
 - **Upstash Redis account**
 - **OpenAI/Anthropic/Azure OpenAI API key**
 - **Azure account** (for Blob Storage)
@@ -84,10 +84,13 @@ notepad .env
 
 **Required variables:**
 ```ini
-# Supabase (get from your Supabase project settings)
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your-service-role-key
-SUPABASE_DB_URL=postgresql://postgres:your-password@db.your-project.supabase.co:5432/postgres
+# Azure Database (PostgreSQL/SQL/Cosmos)
+AZURE_DB_CONNECTION_STRING=postgresql://username:password@your-server.postgres.database.azure.com:5432/your-database?sslmode=require
+# OR use individual parameters:
+AZURE_DB_SERVER=your-server.postgres.database.azure.com
+AZURE_DB_NAME=your-database
+AZURE_DB_USERNAME=your-username
+AZURE_DB_PASSWORD=your-password
 
 # Upstash Redis
 UPSTASH_REDIS_URL=https://your-redis.upstash.io
@@ -110,8 +113,8 @@ AZURE_STORAGE_CONTAINER_NAME=rag-research-documents
 ### 3. Initialize Database
 
 ```bash
-# Ensure pgvector extension is enabled in Supabase
-# Go to: Supabase Dashboard → Database → Extensions → Enable "vector"
+# For Azure PostgreSQL, enable pgvector extension:
+# Azure Portal → Your PostgreSQL Server → Extensions → Enable "vector"
 
 # Run schema setup
 python -c "from database.connection import execute_schema_file; execute_schema_file('database/schema.sql')"
@@ -409,7 +412,7 @@ API_WORKERS=8
 
 ### Recommended Stack
 - **Compute**: Azure App Service / Azure Container Instances
-- **Database**: Supabase (managed Postgres with pgvector)
+- **Database**: Azure Database for PostgreSQL (with pgvector extension)
 - **Cache**: Upstash Redis (serverless)
 - **Storage**: Azure Blob Storage
 - **Orchestration**: n8n Cloud or self-hosted
@@ -486,11 +489,11 @@ research agent brief/
 
 ### Database Connection Fails
 ```bash
-# Check Supabase connection
+# Check Azure database connection
 python -c "from database.connection import test_connection; test_connection()"
 
-# Verify pgvector extension
-# Supabase Dashboard → Database → Extensions → Enable "vector"
+# Verify pgvector extension is enabled
+# Azure Portal → Your PostgreSQL Server → Extensions → Enable "vector"
 ```
 
 ### PDF Parsing Fails

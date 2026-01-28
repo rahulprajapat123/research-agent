@@ -121,6 +121,47 @@ az storage account show-connection-string \
   --output tsv
 ```
 
+### 2.4 Create Azure Database for PostgreSQL
+```bash
+# Create PostgreSQL server
+DB_SERVER_NAME="research-copilot-db"
+DB_ADMIN_USER="dbadmin"
+DB_ADMIN_PASSWORD="YourStrongPassword123!"  # Change this!
+
+az postgres flexible-server create \
+  --resource-group $RESOURCE_GROUP \
+  --name $DB_SERVER_NAME \
+  --location $LOCATION \
+  --admin-user $DB_ADMIN_USER \
+  --admin-password $DB_ADMIN_PASSWORD \
+  --sku-name Standard_B1ms \
+  --tier Burstable \
+  --version 14 \
+  --storage-size 32
+
+# Create database
+DB_NAME="research_intelligence"
+
+az postgres flexible-server db create \
+  --resource-group $RESOURCE_GROUP \
+  --server-name $DB_SERVER_NAME \
+  --database-name $DB_NAME
+
+# Enable pgvector extension (connect via psql or Azure portal)
+# Azure Portal → Your PostgreSQL Server → Extensions → Enable "vector"
+
+# Configure firewall rules (allow Azure services)
+az postgres flexible-server firewall-rule create \
+  --resource-group $RESOURCE_GROUP \
+  --name $DB_SERVER_NAME \
+  --rule-name AllowAzureServices \
+  --start-ip-address 0.0.0.0 \
+  --end-ip-address 0.0.0.0
+
+# Get connection string
+echo "postgresql://$DB_ADMIN_USER:$DB_ADMIN_PASSWORD@$DB_SERVER_NAME.postgres.database.azure.com:5432/$DB_NAME?sslmode=require"
+```
+
 ---
 
 ## 🐳 Step 3: Build and Push Docker Image
@@ -186,6 +227,9 @@ az webapp config container set \
 # Get your storage connection string (from step 2.3)
 STORAGE_CONN_STRING="<your-connection-string>"
 
+# Get your database connection string (from step 2.4)
+DB_CONN_STRING="postgresql://$DB_ADMIN_USER:$DB_ADMIN_PASSWORD@$DB_SERVER_NAME.postgres.database.azure.com:5432/$DB_NAME?sslmode=require"
+
 # Set app settings
 az webapp config appsettings set \
   --resource-group $RESOURCE_GROUP \
@@ -198,6 +242,8 @@ az webapp config appsettings set \
     OPENAI_API_KEY="your-openai-api-key" \
     AZURE_STORAGE_CONNECTION_STRING="$STORAGE_CONN_STRING" \
     AZURE_STORAGE_CONTAINER_NAME="research-papers" \
+    AZURE_DB_CONNECTION_STRING="$DB_CONN_STRING" \
+    AZURE_DB_TYPE="postgresql" \
     LLM_PROVIDER="openai" \
     LLM_MODEL="gpt-4-turbo-preview" \
     API_WORKERS="4" \

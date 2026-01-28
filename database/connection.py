@@ -39,7 +39,29 @@ def _normalize_db_url(db_url: str) -> str:
     return f"{scheme}{scheme_sep}{user}:{safe_password}@{hostpart}"
 
 
-_db_url = _normalize_db_url(settings.supabase_db_url)
+def _get_azure_db_url() -> str:
+    """Construct Azure database connection string"""
+    # Use full connection string if provided
+    if settings.azure_db_connection_string:
+        return _normalize_db_url(settings.azure_db_connection_string)
+    
+    # Otherwise construct from individual components
+    if not all([settings.azure_db_server, settings.azure_db_name, 
+                settings.azure_db_username, settings.azure_db_password]):
+        raise ValueError("Azure database configuration incomplete. Provide either "
+                        "azure_db_connection_string or all of: azure_db_server, "
+                        "azure_db_name, azure_db_username, azure_db_password")
+    
+    password = quote(settings.azure_db_password, safe="")
+    
+    return (
+        f"postgresql://{settings.azure_db_username}:{password}@"
+        f"{settings.azure_db_server}:{settings.azure_db_port}/{settings.azure_db_name}"
+        f"?sslmode={settings.azure_db_ssl_mode}"
+    )
+
+
+_db_url = _get_azure_db_url()
 
 # SQLAlchemy setup
 engine = create_engine(

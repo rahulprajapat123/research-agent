@@ -31,6 +31,17 @@ class Settings(BaseSettings):
     upstash_redis_url: Optional[str] = None
     upstash_redis_token: Optional[str] = None
     
+    # Azure Database (PostgreSQL/SQL/Cosmos)
+    azure_db_type: Literal["postgresql", "sql", "cosmos"] = "postgresql"
+    azure_db_server: Optional[str] = None
+    azure_db_name: Optional[str] = None
+    azure_db_username: Optional[str] = None
+    azure_db_password: Optional[str] = None
+    azure_db_port: int = 5432
+    azure_db_ssl_mode: str = "require"
+    # Full connection string (alternative to individual params)
+    azure_db_connection_string: Optional[str] = None
+    
     # LLM Providers
     openai_api_key: Optional[str] = None
     anthropic_api_key: Optional[str] = None
