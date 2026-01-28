@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Research Copilot</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 2rem;
+            color: #333;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 3rem;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.95;
+        }
+
+        .card {
+            background: white;
+            border-radius: 1rem;
+            padding: 2.5rem;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            margin-bottom: 2rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #333;
+            font-size: 1rem;
+        }
+
+        .form-group small {
+            color: #666;
+            font-size: 0.875rem;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.875rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-family: inherit;
+            transition: all 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 150px;
+        }
+
+        .btn-proceed {
+            width: 100%;
+            padding: 1.25rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 1.2rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .btn-proceed:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-proceed:active {
+            transform: translateY(0);
+        }
+
+        .btn-proceed:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .loading .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading p {
+            color: #666;
+            font-size: 1rem;
+        }
+
+        .results {
+            display: none;
+        }
+
+        .results.active {
+            display: block;
+        }
+
+        .results h2 {
+            color: #667eea;
+            margin-bottom: 1.5rem;
+            font-size: 1.75rem;
+        }
+
+        .results h3 {
+            color: #333;
+            margin: 2rem 0 1rem;
+            font-size: 1.3rem;
+            border-left: 4px solid #667eea;
+            padding-left: 1rem;
+        }
+
+        .results h4 {
+            color: #555;
+            margin: 1.5rem 0 0.75rem;
+            font-size: 1.1rem;
+        }
+
+        .results ul {
+            padding-left: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .results li {
+            margin-bottom: 0.5rem;
+            line-height: 1.6;
+        }
+
+        .results p {
+            line-height: 1.7;
+            margin-bottom: 1rem;
+            color: #555;
+        }
+
+        .highlight-box {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+            border-left: 4px solid #667eea;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .highlight-box strong {
+            color: #667eea;
+            font-size: 1.2rem;
+        }
+
+        .paper-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+            font-size: 0.9rem;
+        }
+
+        .paper-table th {
+            background: #f5f5f5;
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 2px solid #667eea;
+            font-weight: 600;
+        }
+
+        .paper-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .paper-table a {
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        .paper-table a:hover {
+            text-decoration: underline;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            background: #667eea;
+            color: white;
+            border-radius: 1rem;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .tech-stack {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .tech-item {
+            background: #f9f9f9;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            border-left: 3px solid #667eea;
+        }
+
+        .tech-item h4 {
+            margin: 0 0 0.5rem 0;
+            color: #667eea;
+        }
+
+        .milestone {
+            background: #f9f9f9;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .milestone strong {
+            color: #667eea;
+            text-transform: uppercase;
+            font-size: 0.9rem;
+        }
+
+        .risk-box {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            border-radius: 0.25rem;
+        }
+
+        .next-steps {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.1));
+            border-left: 4px solid #10b981;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            margin-top: 2rem;
+        }
+
+        .next-steps h3 {
+            color: #059669;
+            margin: 0 0 1rem 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1><i class="fas fa-robot"></i> Project Research Copilot</h1>
+            <p>AI-powered product research assistant for developers</p>
+        </div>
+
+        <!-- Input Form -->
+        <div class="card" id="inputForm">
+            <h2 style="margin-bottom: 1.5rem; color: #333;">
+                <i class="fas fa-pencil-alt"></i> Enter Project Details
+            </h2>
+            
+            <form id="copilotForm">
+                <div class="form-group">
+                    <label for="projectName">
+                        <i class="fas fa-tag"></i> Project Name
+                    </label>
+                    <input 
+                        type="text" 
+                        id="projectName" 
+                        placeholder="e.g., Healthcare RAG Assistant"
+                        required
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="documentBrief">
+                        <i class="fas fa-file-alt"></i> Document Brief
+                        <br>
+                        <small>Describe what you want to build (2-5 sentences)</small>
+                    </label>
+                    <textarea 
+                        id="documentBrief" 
+                        placeholder="Example: We want to build an AI assistant for doctors that can answer clinical questions using latest research papers. The system should retrieve relevant studies from PubMed and medical journals, then generate evidence-based answers with proper citations. Target response time is under 3 seconds."
+                        required
+                    ></textarea>
+                </div>
+
+                <button type="submit" class="btn-proceed" id="proceedBtn">
+                    <i class="fas fa-arrow-right"></i> Proceed with Analysis
+                </button>
+            </form>
+        </div>
+
+        <!-- Loading State -->
+        <div class="card loading" id="loadingState">
+            <div class="spinner"></div>
+            <p><strong>Analyzing your project...</strong></p>
+            <p id="loadingStatus">Extracting keywords and topics from your brief</p>
+        </div>
+
+        <!-- Results -->
+        <div class="card results" id="resultsCard">
+            <div id="resultsContent"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000/api/v1/copilot';
+
+        document.getElementById('copilotForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const projectName = document.getElementById('projectName').value;
+            const documentBrief = document.getElementById('documentBrief').value;
+
+            // Hide form, show loading
+            document.getElementById('inputForm').style.display = 'none';
+            document.getElementById('loadingState').classList.add('active');
+
+            const statusEl = document.getElementById('loadingStatus');
+            const statuses = [
+                'Extracting keywords and topics from your brief',
+                'Searching arXiv for relevant research papers',
+                'Searching OpenReview and AI/ML research sites',
+                'Analyzing and ranking research papers',
+                'Making architecture decisions',
+                'Generating comprehensive build plan'
+            ];
+
+            let statusIndex = 0;
+            const statusInterval = setInterval(() => {
+                statusIndex = (statusIndex + 1) % statuses.length;
+                statusEl.textContent = statuses[statusIndex];
+            }, 3000);
+
+            try {
+                const response = await fetch(`${API_URL}/analyze`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        project_name: projectName,
+                        project_brief: documentBrief
+                    })
+                });
+
+                clearInterval(statusInterval);
+
+                if (!response.ok) {
+                    throw new Error(`API Error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                displayResults(data);
+
+            } catch (error) {
+                clearInterval(statusInterval);
+                alert('Error: ' + error.message);
+                document.getElementById('loadingState').classList.remove('active');
+                document.getElementById('inputForm').style.display = 'block';
+            }
+        });
+
+        function displayResults(data) {
+            document.getElementById('loadingState').classList.remove('active');
+            document.getElementById('resultsCard').classList.add('active');
+
+            let html = `
+                <h2><i class="fas fa-check-circle" style="color: #10b981;"></i> ${data.project_name}</h2>
+                
+                <h3><i class="fas fa-bullseye"></i> Project Understanding</h3>
+                <ul>
+                    ${data.project_understanding.map(item => `<li>${item}</li>`).join('')}
+                </ul>
+            `;
+
+            if (data.assumptions && data.assumptions.length > 0) {
+                html += `
+                    <div style="background: #fff3cd; padding: 1rem; border-radius: 0.5rem; margin: 1.5rem 0;">
+                        <strong><i class="fas fa-info-circle"></i> Assumptions:</strong>
+                        <ul style="margin-top: 0.5rem;">
+                            ${data.assumptions.map(item => `<li>${item}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+
+            html += `
+                <h3><i class="fas fa-users"></i> User Personas & Use Cases</h3>
+                <ul>
+                    ${data.user_personas_and_use_cases.map(item => `<li>${item}</li>`).join('')}
+                </ul>
+
+                <h3><i class="fas fa-cogs"></i> Functional Requirements</h3>
+                <h4 style="color: #10b981;">✅ Must-Have</h4>
+                <ul>
+                    ${data.functional_requirements.must_have.map(item => `<li>${item}</li>`).join('')}
+                </ul>
+                <h4 style="color: #3b82f6;">🎯 Should-Have</h4>
+                <ul>
+                    ${data.functional_requirements.should_have.map(item => `<li>${item}</li>`).join('')}
+                </ul>
+
+                <h3><i class="fas fa-tachometer-alt"></i> Non-Functional Requirements</h3>
+                <div style="display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin: 1rem 0;">
+                    ${Object.entries(data.non_functional_requirements).map(([key, value]) => `
+                        <div style="background: #f9f9f9; padding: 1rem; border-radius: 0.5rem;">
+                            <strong style="text-transform: capitalize;">${key.replace('_', ' ')}:</strong>
+                            <p style="margin: 0.5rem 0 0; color: #666;">${value}</p>
+                        </div>
+                    `).join('')}
+                </div>
+
+                <div class="highlight-box">
+                    <h3 style="margin: 0 0 1rem 0; border: none; padding: 0;">
+                        <i class="fas fa-sitemap"></i> Architecture Decision
+                    </h3>
+                    <strong>${data.architecture_decision.choice}</strong>
+                    <p style="margin-top: 0.75rem;">${data.architecture_decision.reasoning}</p>
+                </div>
+
+                <h3><i class="fas fa-project-diagram"></i> System Design</h3>
+                <h4>Components</h4>
+                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                    ${data.system_design.components.map(comp => `<span class="badge">${comp}</span>`).join('')}
+                </div>
+                <h4>Data Flow</h4>
+                <ol>
+                    ${data.system_design.data_flow.map(step => `<li>${step}</li>`).join('')}
+                </ol>
+
+                <h3><i class="fas fa-graduation-cap"></i> Research Papers Found</h3>
+            `;
+
+            const arxivPapers = data.research_digest.arxiv_papers || [];
+            if (arxivPapers.length > 0) {
+                html += `
+                    <h4>arXiv Papers (${arxivPapers.length})</h4>
+                    <table class="paper-table">
+                        <thead>
+                            <tr>
+                                <th>Paper</th>
+                                <th>Year</th>
+                                <th>Key Idea</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${arxivPapers.slice(0, 10).map(paper => `
+                                <tr>
+                                    <td><a href="${paper.url}" target="_blank">${paper.title}</a></td>
+                                    <td><span class="badge">${paper.year}</span></td>
+                                    <td>${paper.key_idea}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+            }
+
+            const keyNotes = data.research_digest.key_notes || [];
+            if (keyNotes.length > 0) {
+                html += `
+                    <div style="background: #dbeafe; padding: 1rem; border-radius: 0.5rem; margin: 1.5rem 0; border-left: 4px solid #3b82f6;">
+                        <strong><i class="fas fa-star"></i> Most Important Research Notes:</strong>
+                        <ul style="margin-top: 0.5rem;">
+                            ${keyNotes.map(note => `<li>${note}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+
+            html += `
+                <h3><i class="fas fa-layer-group"></i> Recommended Tech Stack</h3>
+                <div class="tech-stack">
+                    ${Object.entries(data.tech_stack).map(([layer, techs]) => `
+                        <div class="tech-item">
+                            <h4>${layer.replace(/_/g, ' ').toUpperCase()}</h4>
+                            <ul style="margin: 0; padding-left: 1.25rem; font-size: 0.9rem;">
+                                ${techs.map(tech => `<li>${tech}</li>`).join('')}
+                            </ul>
+                        </div>
+                    `).join('')}
+                </div>
+
+                <h3><i class="fas fa-flag-checkered"></i> Development Milestones</h3>
+                ${Object.entries(data.milestones).map(([phase, desc]) => `
+                    <div class="milestone">
+                        <strong>${phase.toUpperCase()}:</strong> ${desc}
+                    </div>
+                `).join('')}
+
+                <h3><i class="fas fa-exclamation-triangle"></i> Risks & Mitigations</h3>
+                ${data.risks_and_mitigations.map(item => `
+                    <div class="risk-box">
+                        <strong>Risk:</strong> ${item.risk || item.Risk || item}<br>
+                        <strong>Mitigation:</strong> ${item.mitigation || item.Mitigation || 'See documentation'}
+                    </div>
+                `).join('')}
+
+                <div class="next-steps">
+                    <h3><i class="fas fa-rocket"></i> What to Build Next</h3>
+                    <ol>
+                        ${data.next_steps.map(step => `<li>${step}</li>`).join('')}
+                    </ol>
+                </div>
+            `;
+
+            document.getElementById('resultsContent').innerHTML = html;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    </script>
+</body>
+</html>

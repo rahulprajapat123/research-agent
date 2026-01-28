@@ -1,0 +1,35 @@
+# Production requirements - optimized for Azure deployment
+# Core Framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.6.1
+pydantic-settings==2.0.3
+
+# Azure Blob Storage
+azure-storage-blob==12.19.0
+azure-identity==1.15.0
+
+# Redis/Cache (Optional - for Azure Redis)
+redis==5.0.1
+
+# LLM & AI
+openai==1.54.0
+tiktoken==0.5.2
+
+# HTTP Client
+httpx==0.26.0
+
+# Logging & Monitoring
+loguru==0.7.2
+python-json-logger==2.0.7
+
+# Document Processing (minimal)
+beautifulsoup4==4.12.3
+lxml==5.1.0
+
+# Utilities
+python-dotenv==1.0.0
+python-multipart==0.0.6
+
+# Production server
+gunicorn==21.2.0

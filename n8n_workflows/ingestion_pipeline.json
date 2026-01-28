@@ -1,0 +1,326 @@
+{
+  "name": "RAG Research Ingestion Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 0 * * 0"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Weekly Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://export.arxiv.org/rss/cs.IR",
+        "options": {}
+      },
+      "id": "arxiv-ir-rss",
+      "name": "arXiv cs.IR RSS",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [450, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://export.arxiv.org/rss/cs.CL",
+        "options": {}
+      },
+      "id": "arxiv-cl-rss",
+      "name": "arXiv cs.CL RSS",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [450, 400]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Extract paper metadata from RSS feed\nconst items = [];\n\nfor (const item of $input.all()) {\n  const data = item.json;\n  \n  // Parse arXiv ID from link\n  const arxivId = data.link.match(/\\d+\\.\\d+/)?.[0];\n  \n  // Extract authors from description/summary\n  const authors = data.creator || [];\n  \n  items.push({\n    json: {\n      url: `https://arxiv.org/pdf/${arxivId}.pdf`,\n      title: data.title,\n      authors: Array.isArray(authors) ? authors : [authors],\n      publication_date: data.pubDate || data.isoDate,\n      source_type: \"arxiv\",\n      metadata: {\n        arxiv_id: arxivId,\n        abstract: data.contentSnippet || data.summary,\n        categories: data.categories || []\n      }\n    }\n  });\n}\n\nreturn items;"
+      },
+      "id": "parse-arxiv",
+      "name": "Parse arXiv Metadata",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8000/api/v1/ingest",
+        "options": {
+          "bodyParametersUi": {
+            "parameter": [
+              {
+                "name": "url",
+                "value": "={{ $json.url }}"
+              },
+              {
+                "name": "title",
+                "value": "={{ $json.title }}"
+              },
+              {
+                "name": "authors",
+                "value": "={{ $json.authors }}"
+              },
+              {
+                "name": "publication_date",
+                "value": "={{ $json.publication_date }}"
+              },
+              {
+                "name": "source_type",
+                "value": "={{ $json.source_type }}"
+              },
+              {
+                "name": "metadata",
+                "value": "={{ $json.metadata }}"
+              }
+            ]
+          }
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameter": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "id": "post-to-api",
+      "name": "POST to Ingestion API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [850, 300],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.status }}",
+              "operation": "equals",
+              "value2": "processing"
+            }
+          ]
+        }
+      },
+      "id": "check-success",
+      "name": "Check Success",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "channel": "#rag-research-alerts",
+        "text": "✅ Successfully ingested: {{ $json.title }}\\nSource ID: {{ $json.source_id }}\\nTier: {{ $json.tier }}",
+        "otherOptions": {}
+      },
+      "id": "slack-success",
+      "name": "Notify Success (Slack)",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [1250, 200]
+    },
+    {
+      "parameters": {
+        "channel": "#rag-research-alerts",
+        "text": "❌ Ingestion failed: {{ $json.title }}\\nError: {{ $json.error }}",
+        "otherOptions": {}
+      },
+      "id": "slack-error",
+      "name": "Notify Error (Slack)",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [1250, 400]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "validation-webhook",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "validation-webhook",
+      "name": "Validation Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 600],
+      "webhookId": "validation-required"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Process validation webhook payload\nconst items = [];\nconst body = $input.item.json.body;\n\nfor (const claimId of body.claim_ids) {\n  items.push({\n    json: {\n      claim_id: claimId,\n      event: body.event,\n      timestamp: new Date().toISOString()\n    }\n  });\n}\n\nreturn items;"
+      },
+      "id": "process-validation",
+      "name": "Process Validation Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [450, 600]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://localhost:8000/api/v1/validation/queue?limit=10",
+        "options": {}
+      },
+      "id": "fetch-validation-queue",
+      "name": "Fetch Validation Queue",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [650, 600]
+    },
+    {
+      "parameters": {
+        "channel": "#rag-validation-queue",
+        "text": "🔍 *Claims Requiring Validation*\\n\\nTotal pending: {{ $json.length }}\\n\\nPlease review at: http://localhost:8000/api/v1/validation/queue",
+        "otherOptions": {
+          "blocks": [
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "*Validation Required*"
+              }
+            },
+            {
+              "type": "divider"
+            }
+          ]
+        }
+      },
+      "id": "slack-validation",
+      "name": "Notify Validation Queue (Slack)",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [850, 600]
+    }
+  ],
+  "connections": {
+    "schedule-trigger": {
+      "main": [
+        [
+          {
+            "node": "arxiv-ir-rss",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "arxiv-cl-rss",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "arxiv-ir-rss": {
+      "main": [
+        [
+          {
+            "node": "parse-arxiv",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "arxiv-cl-rss": {
+      "main": [
+        [
+          {
+            "node": "parse-arxiv",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "parse-arxiv": {
+      "main": [
+        [
+          {
+            "node": "post-to-api",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "post-to-api": {
+      "main": [
+        [
+          {
+            "node": "check-success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check-success": {
+      "main": [
+        [
+          {
+            "node": "slack-success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "slack-error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "validation-webhook": {
+      "main": [
+        [
+          {
+            "node": "process-validation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "process-validation": {
+      "main": [
+        [
+          {
+            "node": "fetch-validation-queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "fetch-validation-queue": {
+      "main": [
+        [
+          {
+            "node": "slack-validation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all"
+  },
+  "tags": []
+}

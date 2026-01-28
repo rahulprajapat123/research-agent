@@ -1,0 +1,83 @@
+# Azure App Service deployment configuration
+# For use with Azure Container Registry (ACR)
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: research-copilot
+  labels:
+    app: research-copilot
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: research-copilot
+  template:
+    metadata:
+      labels:
+        app: research-copilot
+    spec:
+      containers:
+      - name: copilot-api
+        image: ${ACR_NAME}.azurecr.io/research-copilot:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: APP_NAME
+          value: "Project Research Copilot"
+        - name: ENVIRONMENT
+          value: "production"
+        - name: DEBUG
+          value: "false"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: copilot-secrets
+              key: openai-api-key
+        - name: AZURE_STORAGE_CONNECTION_STRING
+          valueFrom:
+            secretKeyRef:
+              name: copilot-secrets
+              key: azure-storage-connection-string
+        - name: AZURE_STORAGE_CONTAINER_NAME
+          value: "research-papers"
+        - name: LLM_PROVIDER
+          value: "openai"
+        - name: LLM_MODEL
+          value: "gpt-4-turbo-preview"
+        - name: API_WORKERS
+          value: "4"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /api/v1/health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /api/v1/health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: research-copilot-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: research-copilot
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8000
