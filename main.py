@@ -3,7 +3,7 @@ RAG Research Intelligence System - Main API Application
 """
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from loguru import logger
@@ -96,6 +96,16 @@ app.include_router(copilot.router, prefix="/api/v1/copilot", tags=["🤖 Researc
 # app.include_router(validation.router, prefix="/api/v1", tags=["Validation"])
 
 
+@app.get("/favicon.ico")
+async def favicon():
+    """Serve favicon.ico or return 204 No Content if not found"""
+    favicon_path = Path(__file__).parent / "frontend" / "favicon.ico"
+    if favicon_path.exists():
+        return FileResponse(str(favicon_path))
+    # Return 204 No Content instead of 404 to prevent error logs
+    return Response(status_code=204)
+
+
 @app.get("/")
 async def root():
     """Serve Project Research Copilot UI"""
@@ -104,26 +114,3 @@ async def root():
         return FileResponse(str(copilot_page))
     
     # Fallback to main index
-    frontend_index = Path(__file__).parent / "frontend" / "index.html"
-    if frontend_index.exists():
-        return FileResponse(str(frontend_index))
-    
-    # Fallback to API info
-    return {
-        "name": settings.app_name,
-        "version": "1.0.0",
-        "status": "operational",
-        "docs": "/docs",
-        "frontend": "/static/index.html"
-    }
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(
-        "main:app",
-        host=settings.api_host,
-        port=settings.api_port,
-        reload=settings.debug,
-        workers=1 if settings.debug else settings.api_workers
-    )
