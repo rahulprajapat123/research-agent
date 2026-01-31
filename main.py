@@ -114,3 +114,30 @@ async def root():
         return FileResponse(str(copilot_page))
     
     # Fallback to main index
+    frontend_index = Path(__file__).parent / "frontend" / "index.html"
+    if frontend_index.exists():
+        return FileResponse(str(frontend_index))
+    
+    # Fallback to API info
+    return {
+        "name": settings.app_name,
+        "version": "1.0.0",
+        "status": "operational",
+        "docs": "/docs"
+    }
+
+
+if __name__ == "__main__":
+    import uvicorn
+    import os
+    
+    # Railway sets PORT environment variable
+    port = int(os.getenv("PORT", settings.api_port))
+    
+    uvicorn.run(
+        "main:app",
+        host=settings.api_host,
+        port=port,
+        reload=settings.debug,
+        workers=1 if settings.debug else settings.api_workers
+    )
