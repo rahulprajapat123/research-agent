@@ -7,7 +7,7 @@ Pipeline Flow:
 3. Check Azure Blob Storage cache for recent results
 4. Search research papers on arXiv, OpenReview, and AI/ML/RAG sites
 5. Store results in Azure Blob Storage
-6. Analyze architecture (LLM vs RAG vs Hybrid vs Fine-tuning)
+6. Analyze architecture (LLM vs RAG vs Hybrid vs Fine-tuning) from lates research papers
 7. Return comprehensive analysis with 12 sections
 """
 
@@ -69,95 +69,173 @@ class CopilotResponse(BaseModel):
 # ============================================================================
 
 async def extract_keywords_and_topics(document_brief: str) -> Dict[str, Any]:
-    """Extract keywords, topics, and search terms from document brief"""
+    """Extract PROJECT-SPECIFIC keywords, topics, and search terms from document brief"""
     
-    prompt = f"""Analyze this project brief and extract:
-1. Core topics (3-5 main topics)
-2. Keywords for research (8-12 specific keywords)
-3. Technical domains (e.g., NLP, RAG, LLM, embeddings)
-4. Problem domain (e.g., healthcare, legal, education)
+    prompt = f"""Analyze this SPECIFIC project brief and extract UNIQUE search terms for finding relevant research papers.
+
+CRITICAL: Extract terms that are SPECIFIC to this project's requirements, NOT generic AI/ML terms.
 
 Project Brief:
 {document_brief}
 
-Return JSON with:
+Extract:
+1. **Core Topics** (3-5 SPECIFIC main technical challenges/areas for THIS project)
+   - NOT generic like "AI" or "machine learning"
+   - Examples: "multi-document retrieval", "long-context reasoning", "real-time embedding generation"
+
+2. **Research Keywords** (10-15 SPECIFIC technical terms for arXiv search)
+   - Focus on techniques, methods, architectures mentioned or implied
+   - Include domain-specific terminology
+   - Examples: "dense retrieval", "ColBERT", "retrieval-augmented generation", "semantic chunking"
+
+3. **Technical Requirements** (5-8 specific technical needs)
+   - What technologies/methods does THIS project need?
+   - Examples: "vector similarity search", "streaming responses", "document parsing"
+
+4. **Problem Domain** (specific application domain)
+   - Healthcare, Legal, Finance, Education, E-commerce, Customer Support, etc.
+
+5. **Use Case Type** (specific use case category)
+   - QA system, chatbot, knowledge base, document analysis, recommendation engine, etc.
+
+Return ONLY valid JSON (no markdown):
 {{
-  "core_topics": ["topic1", "topic2", ...],
-  "keywords": ["keyword1", "keyword2", ...],
-  "technical_domains": ["domain1", "domain2", ...],
-  "problem_domain": "domain name"
-}}"""
+  "core_topics": ["specific topic 1", "specific topic 2", ...],
+  "keywords": ["specific keyword 1", "specific keyword 2", ...],
+  "technical_requirements": ["requirement 1", "requirement 2", ...],
+  "technical_domains": ["domain1", "domain2"],
+  "problem_domain": "specific domain",
+  "use_case_type": "specific use case",
+  "project_hash": "generate a unique 8-char identifier from key terms"
+}}
+
+Focus on UNIQUENESS - different projects should have DIFFERENT keywords!"""
 
     try:
         response = await llm_client.complete(
             prompt=prompt,
-            temperature=0.3,
-            max_tokens=800
+            temperature=0.4,  # Slightly higher for more varied extraction
+            max_tokens=1000
         )
         
         import json
+        import hashlib
         
         # Try to parse as JSON
         try:
-            extracted = json.loads(response)
+            # Remove markdown code blocks if present
+            clean_response = response.strip()
+            if clean_response.startswith("```"):
+                clean_response = clean_response.split("```")[1]
+                if clean_response.startswith("json"):
+                    clean_response = clean_response[4:]
+            
+            extracted = json.loads(clean_response)
+            
+            # Generate project hash from brief for cache differentiation
+            brief_hash = hashlib.md5(document_brief.encode()).hexdigest()
+            extracted["project_hash"] = brief_hash
+            
         except json.JSONDecodeError:
-            # LLM returned text instead of JSON - parse manually
-            logger.warning("LLM returned non-JSON, extracting keywords from text")
-            keywords = []
-            lines = response.strip().split('\n')
-            for line in lines:
-                # Extract words that look like keywords
-                words = line.replace(',', ' ').replace(';', ' ').split()
-                keywords.extend([w.strip('":[]{}') for w in words if len(w) > 3 and w.isalnum()])
+            # LLM returned text instead of JSON - intelligent extraction
+            logger.warning("LLM returned non-JSON, performing intelligent extraction")
+            
+            # Extract meaningful keywords from the brief itself
+            brief_lower = document_brief.lower()
+            
+            # Technical terms to look for
+            tech_terms = {
+                "retrieval", "embedding", "vector", "semantic", "rag", "llm", "gpt", 
+                "claude", "llama", "bert", "transformer", "attention", "fine-tuning",
+                "prompt", "chat", "conversation", "agent", "tool", "function calling",
+                "knowledge", "document", "search", "query", "ranking", "reranking",
+                "chunking", "indexing", "database", "postgres", "vector db",
+                "api", "real-time", "streaming", "async", "latency", "scale"
+            }
+            
+            found_keywords = []
+            for term in tech_terms:
+                if term in brief_lower:
+                    found_keywords.append(term)
+            
+            # Extract domain indicators
+            domains = {
+                "healthcare": ["medical", "health", "patient", "clinical", "diagnosis"],
+                "legal": ["legal", "law", "contract", "compliance", "regulation"],
+                "finance": ["financial", "trading", "banking", "investment", "market"],
+                "education": ["education", "learning", "student", "course", "teaching"],
+                "ecommerce": ["ecommerce", "shopping", "product", "retail", "commerce"],
+                "support": ["support", "customer", "help", "ticket", "service"]
+            }
+            
+            problem_domain = "general"
+            for domain, indicators in domains.items():
+                if any(ind in brief_lower for ind in indicators):
+                    problem_domain = domain
+                    break
+            
+            # Generate hash
+            brief_hash = hashlib.md5(document_brief.encode()).hexdigest()
             
             extracted = {
-                "core_topics": keywords[:5] if keywords else ["AI"],
-                "keywords": keywords[:15] if keywords else ["artificial intelligence", "machine learning"],
-                "technical_domains": ["AI/ML", "RAG"],
-                "problem_domain": "research"
+                "core_topics": found_keywords[:5] if found_keywords else ["information retrieval", "natural language processing"],
+                "keywords": found_keywords[:15] if found_keywords else ["retrieval augmented generation", "language models"],
+                "technical_requirements": found_keywords[5:10] if len(found_keywords) > 5 else ["embedding generation", "similarity search"],
+                "technical_domains": ["AI/ML", "NLP"],
+                "problem_domain": problem_domain,
+                "use_case_type": "ai application",
+                "project_hash": brief_hash
             }
         
-        logger.info(f"Extracted {len(extracted.get('keywords', []))} keywords from brief")
+        logger.info(f"✅ Extracted {len(extracted.get('keywords', []))} PROJECT-SPECIFIC keywords")
+        logger.info(f"   Project Hash: {extracted.get('project_hash', 'N/A')[:8]}")
+        logger.info(f"   Keywords: {', '.join(extracted.get('keywords', [])[:5])}")
         return extracted
         
     except Exception as e:
         logger.error(f"Keyword extraction failed: {e}")
-        # Fallback: simple extraction
+        # Fallback with hash
+        import hashlib
+        brief_hash = hashlib.md5(document_brief.encode()).hexdigest()
         return {
-            "core_topics": ["AI", "machine learning"],
-            "keywords": ["artificial intelligence", "machine learning", "RAG", "LLM"],
+            "core_topics": ["information retrieval", "language models"],
+            "keywords": ["retrieval augmented generation", "large language models", "semantic search"],
+            "technical_requirements": ["vector embeddings", "similarity search"],
             "technical_domains": ["AI/ML"],
-            "problem_domain": "general"
+            "problem_domain": "general",
+            "use_case_type": "ai application",
+            "project_hash": brief_hash
         }
 
 # ============================================================================
 # STEP 2: SEARCH ARXIV API
 # ============================================================================
 
-async def search_arxiv(keywords: List[str], max_results: int = 10) -> List[ResearchPaper]:
-    """Search arXiv for papers matching keywords"""
+async def search_arxiv(keywords: List[str], max_results: int = 15) -> List[ResearchPaper]:
+    """Search arXiv for LATEST papers (2022-2026) matching keywords"""
     
     papers = []
     
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            # Create search queries from keywords
+            # Create search queries from keywords - simplified approach
             queries = []
             
             # Combine keywords for better results
             for i in range(0, len(keywords), 2):
                 query_terms = keywords[i:i+2]
+                # Simple query without date filtering (we'll filter after)
                 query = " AND ".join([f'all:"{term}"' for term in query_terms])
                 queries.append(query)
             
             # Search each query
-            for query in queries[:4]:  # Limit to avoid rate limits
+            for query in queries[:5]:  # Increased to get more recent papers
                 url = "https://export.arxiv.org/api/query"
                 params = {
                     "search_query": query,
                     "start": 0,
-                    "max_results": max_results // len(queries[:4]),
-                    "sortBy": "relevance",
+                    "max_results": max_results * 2,  # Get more, filter later
+                    "sortBy": "submittedDate",  # Sort by submission date
                     "sortOrder": "descending"
                 }
                 
@@ -179,6 +257,10 @@ async def search_arxiv(keywords: List[str], max_results: int = 10) -> List[Resea
                     
                     published = entry.find("atom:published", ns).text
                     year = int(published[:4])
+                    
+                    # Filter: only keep papers from 2022 onwards
+                    if year < 2022:
+                        continue
                     
                     url = entry.find("atom:id", ns).text
                     abstract = entry.find("atom:summary", ns).text.strip().replace("\n", " ")
@@ -203,7 +285,10 @@ async def search_arxiv(keywords: List[str], max_results: int = 10) -> List[Resea
                 seen.add(title_key)
                 unique_papers.append(paper)
         
-        logger.info(f"Found {len(unique_papers)} unique papers from arXiv")
+        # Sort by year (newest first) and limit
+        unique_papers.sort(key=lambda p: p.year, reverse=True)
+        
+        logger.info(f"Found {len(unique_papers[:max_results])} unique papers from arXiv (2022-2026)")
         return unique_papers[:max_results]
         
     except Exception as e:
@@ -499,62 +584,212 @@ OUTPUT MUST BE VALID JSON:
                 "models": set(),
                 "frameworks": set(),
                 "methods": set(),
-                "databases": set()
+                "databases": set(),
+                "techniques": set(),
+                "metrics": set()
             }
+            
+            paper_insights = []  # Store key insights from each paper
             
             for paper in papers[:12]:
                 text_to_analyze = (paper.title + " " + paper.abstract).lower()
+                paper_year = paper.year
                 
-                # Extract common AI/ML models (2023-2026)
-                if "gpt-4" in text_to_analyze or "gpt4" in text_to_analyze: tech_keywords["models"].add("GPT-4o")
-                elif "gpt" in text_to_analyze: tech_keywords["models"].add("GPT-3.5")
-                if "claude" in text_to_analyze: tech_keywords["models"].add("Claude 3.5 Sonnet")
-                if "llama 3" in text_to_analyze or "llama3" in text_to_analyze: tech_keywords["models"].add("Llama 3.1 (Meta)")
-                if "gemini" in text_to_analyze: tech_keywords["models"].add("Gemini 2.0 (Google)")
-                if "mistral" in text_to_analyze: tech_keywords["models"].add("Mistral Large")
-                if "bert" in text_to_analyze: tech_keywords["models"].add("BERT variants")
-                if "t5" in text_to_analyze: tech_keywords["models"].add("T5")
-                if "roberta" in text_to_analyze: tech_keywords["models"].add("RoBERTa")
-                if "sentence-transformer" in text_to_analyze or "sentence transformer" in text_to_analyze: 
-                    tech_keywords["models"].add("Sentence Transformers")
-                if "colbert" in text_to_analyze: tech_keywords["models"].add("ColBERT")
+                # Extract paper-specific insights
+                insight = {
+                    "paper": paper.title[:100],
+                    "year": paper_year,
+                    "url": paper.url,
+                    "key_contribution": "",
+                    "technologies": []
+                }
                 
-                # Extract frameworks and libraries
-                if "langchain" in text_to_analyze: tech_keywords["frameworks"].add("LangChain")
-                if "llamaindex" in text_to_analyze: tech_keywords["frameworks"].add("LlamaIndex")
-                if "dspy" in text_to_analyze: tech_keywords["frameworks"].add("DSPy")
-                if "pytorch" in text_to_analyze: tech_keywords["frameworks"].add("PyTorch")
-                if "tensorflow" in text_to_analyze: tech_keywords["frameworks"].add("TensorFlow")
-                if "huggingface" in text_to_analyze or "hugging face" in text_to_analyze: 
-                    tech_keywords["frameworks"].add("HuggingFace")
-                if "fastapi" in text_to_analyze: tech_keywords["frameworks"].add("FastAPI")
-                if "instructor" in text_to_analyze: tech_keywords["frameworks"].add("Instructor")
-                if "pydantic" in text_to_analyze: tech_keywords["frameworks"].add("Pydantic")
+                # LATEST AI/ML models (prioritize 2024-2026 papers)
+                if "gpt-4o" in text_to_analyze or "gpt4o" in text_to_analyze: 
+                    tech_keywords["models"].add("GPT-4o (2024)")
+                    insight["technologies"].append("GPT-4o")
+                elif "gpt-4" in text_to_analyze or "gpt4" in text_to_analyze: 
+                    tech_keywords["models"].add("GPT-4 Turbo")
+                    insight["technologies"].append("GPT-4")
+                elif "gpt-3.5" in text_to_analyze or "gpt3" in text_to_analyze: 
+                    tech_keywords["models"].add("GPT-3.5")
+                    
+                if "claude 3.5" in text_to_analyze or "claude-3.5" in text_to_analyze: 
+                    tech_keywords["models"].add("Claude 3.5 Sonnet (2024)")
+                    insight["technologies"].append("Claude 3.5")
+                elif "claude 3" in text_to_analyze or "claude-3" in text_to_analyze: 
+                    tech_keywords["models"].add("Claude 3")
+                elif "claude" in text_to_analyze: 
+                    tech_keywords["models"].add("Claude (Anthropic)")
+                    
+                if "llama 3.3" in text_to_analyze or "llama3.3" in text_to_analyze:
+                    tech_keywords["models"].add("Llama 3.3 (Meta, 2024)")
+                    insight["technologies"].append("Llama 3.3")
+                elif "llama 3.1" in text_to_analyze or "llama3.1" in text_to_analyze:
+                    tech_keywords["models"].add("Llama 3.1 (Meta)")
+                    insight["technologies"].append("Llama 3.1")
+                elif "llama 3" in text_to_analyze or "llama3" in text_to_analyze: 
+                    tech_keywords["models"].add("Llama 3 (Meta)")
+                elif "llama-2" in text_to_analyze or "llama 2" in text_to_analyze:
+                    tech_keywords["models"].add("Llama 2")
+                    
+                if "gemini 2.0" in text_to_analyze or "gemini-2" in text_to_analyze: 
+                    tech_keywords["models"].add("Gemini 2.0 (Google, 2024)")
+                    insight["technologies"].append("Gemini 2.0")
+                elif "gemini 1.5" in text_to_analyze: 
+                    tech_keywords["models"].add("Gemini 1.5 Pro")
+                elif "gemini" in text_to_analyze: 
+                    tech_keywords["models"].add("Gemini (Google)")
+                    
+                if "mistral" in text_to_analyze: 
+                    tech_keywords["models"].add("Mistral Large")
+                    insight["technologies"].append("Mistral")
+                if "qwen" in text_to_analyze or "qwen2" in text_to_analyze:
+                    tech_keywords["models"].add("Qwen 2 (Alibaba)")
+                    insight["technologies"].append("Qwen")
+                if "deepseek" in text_to_analyze:
+                    tech_keywords["models"].add("DeepSeek")
+                    insight["technologies"].append("DeepSeek")
                 
-                # Extract vector databases and storage
-                if "qdrant" in text_to_analyze: tech_keywords["databases"].add("Qdrant")
-                if "pinecone" in text_to_analyze: tech_keywords["databases"].add("Pinecone")
-                if "weaviate" in text_to_analyze: tech_keywords["databases"].add("Weaviate")
-                if "chroma" in text_to_analyze: tech_keywords["databases"].add("ChromaDB")
-                if "pgvector" in text_to_analyze: tech_keywords["databases"].add("pgvector")
-                if "milvus" in text_to_analyze: tech_keywords["databases"].add("Milvus")
-                if "faiss" in text_to_analyze: tech_keywords["databases"].add("FAISS")
+                # Embedding models
+                if "text-embedding-3" in text_to_analyze or "text embedding 3" in text_to_analyze: 
+                    tech_keywords["models"].add("text-embedding-3-large (OpenAI)")
+                    insight["technologies"].append("text-embedding-3")
+                elif "ada-002" in text_to_analyze or "ada 002" in text_to_analyze:
+                    tech_keywords["models"].add("text-embedding-ada-002")
+                if "bge" in text_to_analyze and "embedding" in text_to_analyze: 
+                    tech_keywords["models"].add("BGE embeddings (BAAI)")
+                    insight["technologies"].append("BGE")
+                if "e5" in text_to_analyze and "embedding" in text_to_analyze:
+                    tech_keywords["models"].add("E5 embeddings")
+                    insight["technologies"].append("E5")
+                if "colbert" in text_to_analyze: 
+                    tech_keywords["models"].add("ColBERT v2")
+                    tech_keywords["methods"].add("Late interaction retrieval")
+                    insight["technologies"].append("ColBERT")
+                if "sentence-bert" in text_to_analyze or "sbert" in text_to_analyze:
+                    tech_keywords["models"].add("Sentence-BERT")
+                    insight["technologies"].append("SBERT")
                 
-                # Extract methods and architectures
-                if "transformer" in text_to_analyze: tech_keywords["methods"].add("Transformer architecture")
-                if "rag" in text_to_analyze or "retrieval-augmented" in text_to_analyze or "retrieval augmented" in text_to_analyze: 
+                # RAG and retrieval techniques
+                if "rag" in text_to_analyze or "retrieval-augmented" in text_to_analyze: 
                     tech_keywords["methods"].add("RAG (Retrieval-Augmented Generation)")
-                if "embedding" in text_to_analyze: tech_keywords["methods"].add("Vector embeddings")
-                if "fine-tun" in text_to_analyze: tech_keywords["methods"].add("Fine-tuning")
-                if "prompt engineer" in text_to_analyze or "prompt optim" in text_to_analyze: 
-                    tech_keywords["methods"].add("Prompt optimization")
-                if "few-shot" in text_to_analyze: tech_keywords["methods"].add("Few-shot learning")
-                if "zero-shot" in text_to_analyze: tech_keywords["methods"].add("Zero-shot learning")
-                if "chain-of-thought" in text_to_analyze or "cot" in text_to_analyze: 
-                    tech_keywords["methods"].add("Chain-of-Thought reasoning")
-                if "agent" in text_to_analyze and ("llm" in text_to_analyze or "language model" in text_to_analyze):
-                    tech_keywords["methods"].add("LLM Agents")
-                if "multi-agent" in text_to_analyze: tech_keywords["methods"].add("Multi-agent systems")
+                if "agentic rag" in text_to_analyze or "multi-hop" in text_to_analyze:
+                    tech_keywords["methods"].add("Agentic RAG / Multi-hop retrieval")
+                    insight["key_contribution"] = "Multi-hop retrieval approach"
+                if "self-rag" in text_to_analyze or "self rag" in text_to_analyze:
+                    tech_keywords["methods"].add("Self-RAG (reflective retrieval)")
+                    insight["key_contribution"] = "Self-correcting RAG"
+                if "crag" in text_to_analyze or "corrective rag" in text_to_analyze:
+                    tech_keywords["methods"].add("CRAG (Corrective RAG)")
+                if "raptor" in text_to_analyze and "rag" in text_to_analyze:
+                    tech_keywords["methods"].add("RAPTOR (Recursive embedding)")
+                    insight["key_contribution"] = "Recursive document embedding"
+                if "hyde" in text_to_analyze or "hypothetical document" in text_to_analyze:
+                    tech_keywords["methods"].add("HyDE (Hypothetical Document Embeddings)")
+                    
+                # Advanced techniques
+                if "semantic chunking" in text_to_analyze or "adaptive chunking" in text_to_analyze:
+                    tech_keywords["techniques"].add("Semantic/adaptive chunking")
+                    insight["key_contribution"] = "Advanced chunking strategy"
+                if "rerank" in text_to_analyze or "re-rank" in text_to_analyze:
+                    tech_keywords["techniques"].add("Reranking models")
+                if "cohere rerank" in text_to_analyze:
+                    tech_keywords["models"].add("Cohere Rerank")
+                if "query expansion" in text_to_analyze or "query decomposition" in text_to_analyze:
+                    tech_keywords["techniques"].add("Query expansion/decomposition")
+                if "hybrid search" in text_to_analyze or "bm25" in text_to_analyze:
+                    tech_keywords["techniques"].add("Hybrid search (vector + keyword)")
+                    
+                # Evaluation metrics
+                if "ragas" in text_to_analyze:
+                    tech_keywords["frameworks"].add("RAGAS (RAG evaluation)")
+                    tech_keywords["metrics"].add("Faithfulness, Relevancy, Context Recall")
+                if "rouge" in text_to_analyze:
+                    tech_keywords["metrics"].add("ROUGE metrics")
+                if "bleu" in text_to_analyze:
+                    tech_keywords["metrics"].add("BLEU score")
+                if "recall" in text_to_analyze and "precision" in text_to_analyze:
+                    tech_keywords["metrics"].add("Precision/Recall")
+                if "ndcg" in text_to_analyze or "normalized discounted" in text_to_analyze:
+                    tech_keywords["metrics"].add("NDCG (ranking metric)")
+                if "hit rate" in text_to_analyze or "mrr" in text_to_analyze:
+                    tech_keywords["metrics"].add("Hit Rate / MRR")
+                    
+                # Frameworks and libraries
+                if "langchain" in text_to_analyze: 
+                    tech_keywords["frameworks"].add("LangChain")
+                    insight["technologies"].append("LangChain")
+                if "llamaindex" in text_to_analyze or "llama-index" in text_to_analyze or "llama index" in text_to_analyze: 
+                    tech_keywords["frameworks"].add("LlamaIndex")
+                    insight["technologies"].append("LlamaIndex")
+                if "dspy" in text_to_analyze or "dsp" in text_to_analyze: 
+                    tech_keywords["frameworks"].add("DSPy (Stanford)")
+                    insight["technologies"].append("DSPy")
+                if "haystack" in text_to_analyze:
+                    tech_keywords["frameworks"].add("Haystack")
+                if "autogen" in text_to_analyze or "auto-gen" in text_to_analyze:
+                    tech_keywords["frameworks"].add("AutoGen (Microsoft)")
+                    insight["technologies"].append("AutoGen")
+                if "crewai" in text_to_analyze or "crew ai" in text_to_analyze:
+                    tech_keywords["frameworks"].add("CrewAI")
+                if "langgraph" in text_to_analyze or "lang graph" in text_to_analyze:
+                    tech_keywords["frameworks"].add("LangGraph (stateful agents)")
+                    insight["technologies"].append("LangGraph")
+                if "instructor" in text_to_analyze and "pydantic" in text_to_analyze: 
+                    tech_keywords["frameworks"].add("Instructor (structured outputs)")
+                if "guidance" in text_to_analyze and "microsoft" in text_to_analyze:
+                    tech_keywords["frameworks"].add("Guidance (Microsoft)")
+                if "lmstudio" in text_to_analyze or "lm studio" in text_to_analyze:
+                    tech_keywords["frameworks"].add("LM Studio")
+                if "vllm" in text_to_analyze:
+                    tech_keywords["frameworks"].add("vLLM (fast inference)")
+                    insight["technologies"].append("vLLM")
+                    
+                # Vector databases
+                if "qdrant" in text_to_analyze: 
+                    tech_keywords["databases"].add("Qdrant")
+                    insight["technologies"].append("Qdrant")
+                if "pinecone" in text_to_analyze: 
+                    tech_keywords["databases"].add("Pinecone")
+                    insight["technologies"].append("Pinecone")
+                if "weaviate" in text_to_analyze: 
+                    tech_keywords["databases"].add("Weaviate")
+                    insight["technologies"].append("Weaviate")
+                if "chroma" in text_to_analyze or "chromadb" in text_to_analyze: 
+                    tech_keywords["databases"].add("ChromaDB")
+                if "pgvector" in text_to_analyze or "pg_vector" in text_to_analyze: 
+                    tech_keywords["databases"].add("pgvector (PostgreSQL)")
+                    insight["technologies"].append("pgvector")
+                if "milvus" in text_to_analyze: 
+                    tech_keywords["databases"].add("Milvus")
+                if "faiss" in text_to_analyze: 
+                    tech_keywords["databases"].add("FAISS (Meta)")
+                if "vespa" in text_to_analyze:
+                    tech_keywords["databases"].add("Vespa")
+                if "elasticsearch" in text_to_analyze:
+                    tech_keywords["databases"].add("Elasticsearch")
+                if "redis" in text_to_analyze and "vector" in text_to_analyze:
+                    tech_keywords["databases"].add("Redis Stack (vector search)")
+                    
+                # Extract key contribution if not set
+                if not insight["key_contribution"]:
+                    # Try to find performance claims
+                    if "improve" in text_to_analyze or "better" in text_to_analyze or "outperform" in text_to_analyze:
+                        # Extract number if present
+                        import re
+                        numbers = re.findall(r'(\d+(?:\.\d+)?)\s*%', text_to_analyze)
+                        if numbers:
+                            insight["key_contribution"] = f"Performance improvement: {numbers[0]}%"
+                        else:
+                            insight["key_contribution"] = "Performance improvements demonstrated"
+                    elif "novel" in text_to_analyze or "new" in text_to_analyze:
+                        insight["key_contribution"] = "Novel approach or architecture"
+                    else:
+                        insight["key_contribution"] = paper.abstract[:150] + "..."
+                
+                if insight["technologies"] or insight["key_contribution"] != paper.abstract[:150] + "...":
+                    paper_insights.append(insight)
             
             # Determine architecture from project brief
             brief_lower = document_brief.lower()
@@ -567,10 +802,20 @@ OUTPUT MUST BE VALID JSON:
                 architecture_choice = "LLM Agents with Tools"
             
             # Build dynamic tech stack based on extracted technologies
-            llm_models = list(tech_keywords["models"])[:4] if tech_keywords["models"] else ["GPT-4o (OpenAI)", "Claude 3.5 Sonnet"]
-            frameworks_list = list(tech_keywords["frameworks"])[:5] if tech_keywords["frameworks"] else ["LangChain", "FastAPI"]
-            vector_dbs = list(tech_keywords["databases"])[:3] if tech_keywords["databases"] else ["Qdrant", "Pinecone"]
-            methods_list = list(tech_keywords["methods"])[:6]
+            llm_models = list(tech_keywords["models"])[:6] if tech_keywords["models"] else ["GPT-4o (OpenAI)", "Claude 3.5 Sonnet"]
+            frameworks_list = list(tech_keywords["frameworks"])[:6] if tech_keywords["frameworks"] else ["LangChain", "FastAPI"]
+            vector_dbs = list(tech_keywords["databases"])[:4] if tech_keywords["databases"] else ["Qdrant", "Pinecone"]
+            methods_list = list(tech_keywords["methods"])[:8]
+            techniques_list = list(tech_keywords["techniques"])[:6]
+            metrics_list = list(tech_keywords["metrics"])[:5]
+            
+            # Create detailed research insights
+            research_insights = []
+            for insight in paper_insights[:10]:  # Top 10 papers with meaningful insights
+                research_insights.append(
+                    f"[{insight['year']}] {insight['paper']} - {insight['key_contribution']}" + 
+                    (f" (Uses: {', '.join(insight['technologies'][:3])})" if insight['technologies'] else "")
+                )
             
             analysis = {
                 "project_understanding": ["Analyzing project requirements and objectives"],
@@ -602,18 +847,23 @@ OUTPUT MUST BE VALID JSON:
                 },
                 "research_digest": {
                     "key_notes": [
-                        f"Latest research ({len([p for p in papers if p.year >= 2024])} papers from 2024-2026)",
-                        f"Key methodologies: {', '.join(methods_list[:3])}" if methods_list else "Modern AI/ML approaches",
-                        f"State-of-art models: {', '.join(list(tech_keywords['models'])[:3])}" if tech_keywords['models'] else "Latest LLM architectures",
-                        f"Popular frameworks: {', '.join(list(tech_keywords['frameworks'])[:3])}" if tech_keywords['frameworks'] else "Emerging AI frameworks",
-                        f"Vector databases: {', '.join(vector_dbs[:2])}" if vector_dbs else "Modern vector storage solutions"
+                        f"📊 Analyzed {len(papers)} LATEST papers ({len([p for p in papers if p.year >= 2024])} from 2024-2026)",
+                        f"🔬 Key methodologies: {', '.join(methods_list[:4])}" if methods_list else "Modern AI/ML approaches",
+                        f"🤖 State-of-art models: {', '.join(list(tech_keywords['models'])[:4])}" if tech_keywords['models'] else "Latest LLM architectures",
+                        f"🛠️ Popular frameworks: {', '.join(list(tech_keywords['frameworks'])[:4])}" if tech_keywords['frameworks'] else "Emerging AI frameworks",
+                        f"💾 Vector databases: {', '.join(vector_dbs[:3])}" if vector_dbs else "Modern vector storage solutions",
+                        f"🎯 Advanced techniques: {', '.join(techniques_list[:4])}" if techniques_list else "State-of-art methods",
+                        f"📈 Evaluation metrics: {', '.join(metrics_list[:4])}" if metrics_list else "Standard evaluation approaches"
                     ],
-                    "novel_techniques": methods_list if methods_list else ["Transformer-based architectures", "Retrieval-augmented approaches"],
-                    "specific_models": list(tech_keywords["models"])[:6] if tech_keywords["models"] else ["GPT-4o", "Claude 3.5"],
+                    "paper_insights": research_insights if research_insights else ["Papers analyzed for latest techniques"],
+                    "novel_techniques": methods_list + techniques_list if (methods_list or techniques_list) else ["Transformer-based architectures", "Retrieval-augmented approaches"],
+                    "specific_models": list(tech_keywords["models"])[:8] if tech_keywords["models"] else ["GPT-4o", "Claude 3.5"],
                     "latest_findings": [
-                        f"Analysis based on {len(papers)} papers from {min(p.year for p in papers) if papers else 2020}-{max(p.year for p in papers) if papers else 2026}",
-                        f"Emerging patterns: {', '.join(methods_list[:2])}" if len(methods_list) >= 2 else "Modern AI/ML techniques"
-                    ]
+                        f"Papers span {min(p.year for p in papers) if papers else 2023}-{max(p.year for p in papers) if papers else 2026}",
+                        f"Emerging patterns: {', '.join(methods_list[:3])}" if len(methods_list) >= 3 else "Modern AI/ML techniques",
+                        f"Most cited tools: {', '.join(list(tech_keywords['frameworks'])[:3])}" if len(tech_keywords['frameworks']) >= 3 else "Leading frameworks"
+                    ],
+                    "evaluation_frameworks": list(tech_keywords["metrics"]) if tech_keywords["metrics"] else ["Custom evaluation metrics"]
                 },
                 "tech_stack": {
                     "llm_layer": llm_models if llm_models else ["GPT-4o (OpenAI)", "Claude 3.5 Sonnet (Anthropic)", "Llama 3.1 (open-source)"],
@@ -650,8 +900,20 @@ OUTPUT MUST BE VALID JSON:
                 ]
             }
         
-        # Add research papers to digest
+        # Add research papers to digest with FULL details
         research_digest = {
+            "papers_analyzed": [
+                {
+                    "title": p.title,
+                    "authors": p.authors[:3] if len(p.authors) > 3 else p.authors,  # First 3 authors
+                    "year": p.year,
+                    "url": p.url,
+                    "abstract": p.abstract[:300] + "..." if len(p.abstract) > 300 else p.abstract,
+                    "source": p.source.upper(),
+                    "relevance_score": round(p.relevance_score, 2) if hasattr(p, 'relevance_score') else 0.0
+                }
+                for p in papers[:15]  # Include top 15 papers
+            ],
             "arxiv_papers": [
                 {
                     "title": p.title,
@@ -672,7 +934,12 @@ OUTPUT MUST BE VALID JSON:
                 }
                 for p in papers if p.source == "openreview"
             ],
-            "key_notes": analysis.get("research_digest", {}).get("key_notes", [])
+            "key_notes": analysis.get("research_digest", {}).get("key_notes", []),
+            "paper_insights": analysis.get("research_digest", {}).get("paper_insights", []),
+            "novel_techniques": analysis.get("research_digest", {}).get("novel_techniques", []),
+            "specific_models": analysis.get("research_digest", {}).get("specific_models", []),
+            "latest_findings": analysis.get("research_digest", {}).get("latest_findings", []),
+            "evaluation_frameworks": analysis.get("research_digest", {}).get("evaluation_frameworks", [])
         }
         
         return CopilotResponse(
@@ -718,10 +985,22 @@ async def analyze_project(request: CopilotRequest):
     try:
         logger.info(f"🤖 Starting analysis for: {request.project_name}")
         
-        # Step 1: Check cache first
+        # Step 0: Extract keywords first (to get project hash)
+        logger.info("Step 0/7: Extracting project-specific keywords")
+        keywords = await extract_keywords_and_topics(request.project_brief)
+        project_hash = keywords.get("project_hash", "")
+        
+        logger.info(f"   🔑 Project Hash: {project_hash[:8]}")
+        logger.info(f"   🎯 Keywords: {', '.join(keywords.get('keywords', [])[:5])}")
+        
+        # Step 1: Check cache with project-specific hash
         if azure_storage.enabled:
-            logger.info("Step 1/7: Checking Azure Blob Storage cache")
-            cached_papers_dict = azure_storage.get_cached_results(request.project_name, max_age_hours=24)
+            logger.info("Step 1/7: Checking Azure Blob Storage cache (project-specific)")
+            cached_papers_dict = azure_storage.get_cached_results(
+                request.project_name, 
+                max_age_hours=24
+                
+            )
             if cached_papers_dict:
                 logger.info(f"✅ Using {len(cached_papers_dict)} cached papers from Azure Blob")
                 # Convert dict papers back to ResearchPaper objects
@@ -738,7 +1017,6 @@ async def analyze_project(request: CopilotRequest):
                     for p in cached_papers_dict
                 ]
                 # Generate analysis from cached papers
-                keywords = await extract_keywords_and_topics(request.project_brief)
                 logger.info("Step 6/7: Ranking cached papers by relevance")
                 ranked_papers = await rank_papers_by_relevance(
                     cached_papers,
@@ -757,17 +1035,13 @@ async def analyze_project(request: CopilotRequest):
         else:
             logger.info("Step 1/7: Azure Blob Storage not configured - live search only")
         
-        # Step 2: Extract keywords and topics
-        logger.info("Step 2/7: Extracting keywords and topics from document brief")
-        keywords = await extract_keywords_and_topics(request.project_brief)
-        
-        # Step 3: Search arXiv API
-        logger.info(f"Step 3/7: Searching arXiv for papers on: {', '.join(keywords.get('keywords', [])[:5])}")
+        # Step 2: Search arXiv API for LATEST papers
+        logger.info(f"Step 2/7: Searching arXiv for LATEST papers on: {', '.join(keywords.get('keywords', [])[:5])}")
         arxiv_papers = await search_arxiv(keywords.get("keywords", []))
-        logger.info(f"🔍 Found {len(arxiv_papers)} papers from arXiv")
+        logger.info(f"🔍 Found {len(arxiv_papers)} papers from arXiv (2023-2026)")
         
-        # Step 4: Search other AI/ML sites
-        logger.info("Step 4/7: Searching OpenReview and AI/ML research sites")
+        # Step 3: Search other AI/ML sites
+        logger.info("Step 3/7: Searching OpenReview and AI/ML research sites")
         other_papers = await search_ai_ml_sites(keywords.get("keywords", []))
         
         # Combine all sources
@@ -775,31 +1049,33 @@ async def analyze_project(request: CopilotRequest):
         
         logger.info(f"📚 Total papers found: {len(all_papers)}")
         
-        # Step 5: Store in Azure cache
+        # Step 4: Store in Azure cache with project-specific hash
         if azure_storage.enabled and all_papers:
-            logger.info("Step 5/7: Storing results in Azure Blob Storage")
+            logger.info("Step 4/7: Storing results in Azure Blob Storage (project-specific)")
             azure_storage.store_search_results(
                 project_name=request.project_name,
                 papers=all_papers,
                 metadata={
                     "keywords": keywords.get("keywords", []),
                     "search_date": datetime.now().isoformat(),
-                    "paper_count": len(all_papers)
-                }
+                    "paper_count": len(all_papers),
+                    "project_hash": project_hash
+                },
+                
             )
         else:
-            logger.info("Step 5/7: Cache storage skipped (disabled or no papers)")
+            logger.info("Step 4/7: Cache storage skipped (disabled or no papers)")
         
-        # Step 6: Rank papers by relevance
-        logger.info("Step 6/7: Ranking papers by relevance to project")
+        # Step 5: Rank papers by relevance
+        logger.info("Step 5/7: Ranking papers by relevance to project")
         ranked_papers = await rank_papers_by_relevance(
             all_papers,
             request.project_brief,
             keywords.get("keywords", [])
         )
         
-        # Step 7: Generate comprehensive analysis
-        logger.info("Step 7/7: Generating comprehensive 12-section analysis")
+        # Step 6: Generate comprehensive analysis
+        logger.info("Step 6/7: Generating comprehensive 12-section analysis")
         analysis = await generate_comprehensive_analysis(
             project_name=request.project_name,
             document_brief=request.project_brief,
